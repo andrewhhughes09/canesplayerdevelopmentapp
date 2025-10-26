@@ -95,56 +95,49 @@ create index if not exists idx_feed_team_created on feed (team_id, created_at de
 
 -- ROW LEVEL SECURITY POLICIES
 
--- Teams: select allowed if user is a member
-create policy if not exists "Teams: members can view" on teams
+create policy "Teams: members can view" on teams
   for select using (
     exists (
       select 1 from team_members tm where tm.team_id = teams.id and tm.user_id = auth.uid()
     )
   );
 
--- Team members: members can select their team_members rows
-create policy if not exists "TeamMembers: members can view" on team_members
+create policy "TeamMembers: members can view" on team_members
   for select using (
     exists (
       select 1 from team_members tm where tm.team_id = team_members.team_id and tm.user_id = auth.uid()
     )
   );
 
--- Only coaches can insert/update/delete team_members (manage membership)
-create policy if not exists "TeamMembers: coaches manage" on team_members
+create policy "TeamMembers: coaches manage" on team_members
   for all using (
     exists (
       select 1 from team_members tm where tm.team_id = team_members.team_id and tm.user_id = auth.uid() and tm.role = 'coach'
     )
   );
 
--- Players: team members can view players in their team
-create policy if not exists "Players: team members view" on players
+create policy "Players: team members view" on players
   for select using (
     exists (
       select 1 from team_members tm where tm.team_id = players.team_id and tm.user_id = auth.uid()
     )
   );
 
--- Players: players can update their own player row
-create policy if not exists "Players: player update own" on players
+create policy "Players: player update own" on players
   for update using (
     players.user_id = auth.uid()
   ) with check (
     players.user_id = auth.uid()
   );
 
--- Goals: viewable by team members
-create policy if not exists "Goals: team members view" on goals
+create policy "Goals: team members view" on goals
   for select using (
     exists (
       select 1 from team_members tm where tm.team_id = goals.team_id and tm.user_id = auth.uid()
     )
   );
 
--- Goals: insert allowed for coaches (team goals) or for players for personal goals
-create policy if not exists "Goals: insert allowed for team coaches or player owners" on goals
+create policy "Goals: insert allowed for team coaches or player owners" on goals
   for insert with check (
     (
       -- team goal insertion: user must be coach of team
@@ -159,17 +152,25 @@ create policy if not exists "Goals: insert allowed for team coaches or player ow
     )
   );
 
--- Goal progress: viewable by team members
-create policy if not exists "GoalProgress: team members view" on goal_progress
+create policy "GoalProgress: team members view" on goal_progress
   for select using (
     exists (
       select 1 from goals g join players p on p.id = g.player_id join team_members tm on tm.team_id = p.team_id where g.id = goal_progress.goal_id and tm.user_id = auth.uid()
     )
   );
 
--- Goal progress insert/update: player can insert/update their own progress rows
-create policy if not exists "GoalProgress: player manage own" on goal_progress
-  for insert, update using (
+-- Goal progress: players can insert their own progress (check ensures player owns player_id)
+create policy "GoalProgress: player insert own" on goal_progress
+  for insert with check (
+    exists (
+      select 1 from players p where p.id = goal_progress.player_id and p.user_id = auth.uid()
+    )
+  );
+
+-- Goal progress: players can update their own progress (using restricts which rows are visible for update,
+-- with check ensures updated values still belong to the player)
+create policy "GoalProgress: player update own" on goal_progress
+  for update using (
     exists (
       select 1 from players p where p.id = goal_progress.player_id and p.user_id = auth.uid()
     )
@@ -179,32 +180,28 @@ create policy if not exists "GoalProgress: player manage own" on goal_progress
     )
   );
 
--- Sessions: team members can view sessions
-create policy if not exists "Sessions: team members view" on sessions
+create policy "Sessions: team members view" on sessions
   for select using (
     exists (
       select 1 from players p join team_members tm on tm.team_id = p.team_id where p.id = sessions.player_id and tm.user_id = auth.uid()
     )
   );
 
--- Sessions: players can insert their own sessions
-create policy if not exists "Sessions: players insert own" on sessions
+create policy "Sessions: players insert own" on sessions
   for insert with check (
     exists (
       select 1 from players p where p.id = sessions.player_id and p.user_id = auth.uid()
     )
   );
 
--- Feed: team members can view
-create policy if not exists "Feed: members view" on feed
+create policy "Feed: members view" on feed
   for select using (
     exists (
       select 1 from team_members tm where tm.team_id = feed.team_id and tm.user_id = auth.uid()
     )
   );
 
--- Feed: members can post to their team feed
-create policy if not exists "Feed: members insert" on feed
+create policy "Feed: members insert" on feed
   for insert with check (
     exists (
       select 1 from team_members tm where tm.team_id = feed.team_id and tm.user_id = auth.uid()
