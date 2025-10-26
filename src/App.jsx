@@ -6,6 +6,8 @@ import { playersService } from "./services/players";
 import { feedService } from "./services/feed";
 import TeamSetup from "./components/TeamSetup";
 import { LoadingScreen } from "./components/Loading";
+import GoalCreateModal from './components/GoalCreateModal';
+import GoalItem from './components/GoalItem';
 
 // ------------------------------------------------------------
 // 13U Player Development Tracker
@@ -73,6 +75,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [team, setTeam] = useState(null);
+  const [showGoalModal, setShowGoalModal] = useState(false);
 
   const selected = useMemo(() => {
     return players.find(p => p.id === selectedId) || players[0];
@@ -205,6 +208,29 @@ function Dashboard() {
     setTeam(t);
   };
 
+  const refreshTeam = () => {
+    // bump team reference to trigger useEffect reload
+    setTeam(t => t ? { ...t } : t);
+  };
+
+  const refreshPlayer = async (playerId) => {
+    try {
+      const full = await playersService.getPlayer(playerId);
+      setPlayers(prev => prev.map(p => p.id === playerId ? {
+        id: p.id,
+        name: p.name,
+        number: p.number,
+        avatar: p.avatar,
+        goals: (full?.goals || []).map(g => ({ id: g.id, type: g.type, title: g.title, weeklyTarget: g.weekly_target, goal_progress: g.goal_progress, completedThisWeek: (g.goal_progress && g.goal_progress[0] ? g.goal_progress[0].completed_count : 0) })),
+        sessions: full?.sessions || p.sessions,
+        streakDays: p.streak_days || p.streakDays,
+      } : p));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('refreshPlayer failed', e?.message || e);
+    }
+  };
+
   if (loading) return <LoadingScreen message={team ? 'Loading team...' : 'Loading...'} />;
 
   if (!team) {
@@ -225,6 +251,12 @@ function Dashboard() {
             onClick={addSession}
           >
             + Quick Session
+          </button>
+          <button
+            className="rounded-xl border px-4 py-2 text-slate-700 hover:bg-slate-100"
+            onClick={() => setShowGoalModal(true)}
+          >
+            + Add Goal
           </button>
           <ResetWeekButton players={players} setPlayers={setPlayers} />
           <button
@@ -274,21 +306,19 @@ function Dashboard() {
                 <h2 className="text-xl font-semibold">#{selected.number} {selected.name}</h2>
                 <p className="text-slate-600 text-sm">Weekly Progress: {totalThisWeek(selected)} / {totalTarget(selected)}</p>
               </div>
+              <div className="ml-auto">
+                <button
+                  onClick={() => setShowGoalModal(true)}
+                  className="rounded-lg border px-3 py-1 text-sm"
+                >
+                  + Add Goal
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {selected.goals.map(g => (
-                <div key={g.id} className="rounded-xl border p-3">
-                  <div className="mb-1 text-xs font-semibold text-slate-500">{g.type}</div>
-                  <div className="mb-2 font-medium">{g.title}</div>
-                  <div className="mb-2 text-sm">Completed: {g.completedThisWeek} / {g.weeklyTarget}</div>
-                  <button
-                    onClick={() => toggleGoalTick(g.id)}
-                    className="w-full rounded-lg bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                  >
-                    Mark +1
-                  </button>
-                </div>
+                <GoalItem key={g.id} goal={g} playerId={selected.id} onUpdated={() => refreshPlayer(selected.id)} />
               ))}
             </div>
           </div>
@@ -341,6 +371,28 @@ function Dashboard() {
       <footer className="mt-6 text-center text-xs text-slate-500">
         Built for 13U: simple, visual, and fun.
       </footer>
+      <GoalCreateModal
+        isOpen={showGoalModal}
+        onClose={() => setShowGoalModal(false)}
+        onCreated={(created) => {
+          // created may contain snake_case keys from Supabase
+          const isTeam = created?.is_team_goal ?? created?.isTeamGoal;
+          const playerId = created?.player_id ?? created?.playerId ?? null;
+          if (isTeam) {
+            refreshTeam();
+          } else if (playerId) {
+            // refresh that player and select
+            refreshPlayer(playerId);
+            setSelectedId(playerId);
+          } else {
+            refreshTeam();
+          }
+        }}
+        teamId={team.id}
+        players={players}
+        defaultPlayerId={selected.id}
+        currentUser={user}
+      />
     </div>
   );
 }
