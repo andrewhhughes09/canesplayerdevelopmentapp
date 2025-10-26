@@ -180,6 +180,29 @@ create policy "GoalProgress: player update own" on goal_progress
     )
   );
 
+-- Allow coaches to insert goal progress for players on their team
+create policy "GoalProgress: coaches insert" on goal_progress
+  for insert with check (
+    exists (
+      select 1 from players p join team_members tm on tm.team_id = p.team_id
+      where p.id = goal_progress.player_id and tm.user_id = auth.uid() and tm.role = 'coach'
+    )
+  );
+
+-- Allow coaches to update goal progress for players on their team
+create policy "GoalProgress: coaches update" on goal_progress
+  for update using (
+    exists (
+      select 1 from players p join team_members tm on tm.team_id = p.team_id
+      where p.id = goal_progress.player_id and tm.user_id = auth.uid() and tm.role = 'coach'
+    )
+  ) with check (
+    exists (
+      select 1 from players p join team_members tm on tm.team_id = p.team_id
+      where p.id = goal_progress.player_id and tm.user_id = auth.uid() and tm.role = 'coach'
+    )
+  );
+
 create policy "Sessions: team members view" on sessions
   for select using (
     exists (

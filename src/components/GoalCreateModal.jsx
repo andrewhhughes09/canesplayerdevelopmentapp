@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { goalsService } from '../services/goals';
+import { useToast } from './ToastProvider';
 
 export default function GoalCreateModal({ isOpen, onClose, onCreated, teamId, players = [], defaultPlayerId = null, currentUser }) {
   const [title, setTitle] = useState('');
@@ -9,6 +10,7 @@ export default function GoalCreateModal({ isOpen, onClose, onCreated, teamId, pl
   const [playerId, setPlayerId] = useState(defaultPlayerId || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const toast = useToast();
 
   if (!isOpen) return null;
 
@@ -30,9 +32,16 @@ export default function GoalCreateModal({ isOpen, onClose, onCreated, teamId, pl
 
       const created = await goalsService.createGoal(payload);
       onCreated && onCreated(created);
+      toast.add('Goal created', { type: 'info', ttl: 3000 });
+      // reset form
+      setTitle('');
+      setWeeklyTarget(1);
+      setIsTeamGoal(false);
+      setPlayerId(defaultPlayerId || '');
       onClose && onClose();
     } catch (err) {
       setError(err?.message || String(err));
+      toast.add(err?.message || 'Failed to create goal', { type: 'error', ttl: 5000 });
     } finally {
       setLoading(false);
     }

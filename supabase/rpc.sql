@@ -5,6 +5,9 @@
 -- Ensure uniqueness so ON CONFLICT works as intended
 CREATE UNIQUE INDEX IF NOT EXISTS idx_goal_progress_unique ON goal_progress(goal_id, player_id, week_start);
 
+-- Drop any existing function overloads (makes this file safe to re-run)
+DROP FUNCTION IF EXISTS increment_goal_progress(uuid, uuid, date, int);
+
 CREATE OR REPLACE FUNCTION increment_goal_progress(
   p_goal uuid,
   p_player uuid,
